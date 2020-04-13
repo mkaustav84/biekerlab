@@ -1,0 +1,99 @@
+---
+title: "Erythoid macrophage comparison plots"
+author: "Kaustav Mukherjee"
+output: html_document
+---
+
+```{r}
+library("knitr")
+opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
+```
+
+```{r}
+## Loading Required Packages
+library("dplyr")
+library("cluster")
+library("ggplot2")
+library("magrittr")
+library("RColorBrewer")
+library("reshape2")
+library("tidyr")
+library("ggfortify")
+library("ggdendro")
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+## Reading in count files #######
+set.seed(18)
+counts <- read.csv("../counts_normalized.csv", header = T, sep = ",", row.names = 1, check.names = FALSE)
+counts <- counts[-(23338:23342),] ## removed last few rows with summaries
+counts <- counts[complete.cases(counts),] ## removing empty rows
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+#### Checking the distribution of ery1 reads using a histogram #####
+ggplot(counts, aes(x = `ESRE`)) + geom_histogram(binwidth = 100) + ylim(0,50) + xlim(0,25000)
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+### Log transformation of data #####
+counts <- counts + 1 ## adding a pseudocount of 1
+counts_log <- log2(counts)
+colnames(counts_log) <- c("ESRE1","ESRE2","ESRE3","FL F480-1","FL F480-2","FL F480-3","Spl F480-1","Spl F480-2")
+cell_type <- c("ESRE","ESRE","ESRE","FL mac","FL mac","FL mac","Spl mac","Spl mac")
+```
+
+
+```{r, echo = TRUE, tidy=TRUE}
+## Hierarchical clustering of cell types using top 10000 genes
+set.seed(18)
+top10000 <- head(counts_log[order(counts_log$`FL F480-1`, decreasing= T),], n = 10000) ### sorting in descending order on the basis of one sample and taking the top 10000 observations
+ggplot(top10000, aes(x = `FL F480-1`)) + geom_histogram(binwidth = 0.1)
+clus10000 <- hclust(as.dist(1-cor(top10000)))
+plotclus <- ggdendrogram(clus10000, rotate = TRUE, size = 2) + xlab("") + ylab("") + theme_minimal() + theme(text = element_text(family = "Times", face = "bold", size = 20))
+plotclus
+ggsave("tree_10000.jpg",device = "jpeg", dpi = 300)
+```
+
+
+```{r, echo = TRUE, tidy=TRUE}
+## Preparing the dataframe for PCA and T-SNE
+top10000.tran <- data.frame(t(as.matrix(top10000))) ### transposing the dataframe
+```
+
+
+```{r, echo = TRUE, tidy=TRUE}
+## Principal component analysis of cell types using top 10000 genes
+set.seed(18)
+pca <- prcomp(top10000.tran) 
+summary(pca)
+top10000.tran_pca <- top10000.tran ### creating a new dataframe to add PCA elements for plotting
+top10000.tran_pca$pc1 <- pca$x[,1]
+top10000.tran_pca$pc2 <- pca$x[,2]
+plotpca <- ggplot(top10000.tran_pca, aes(x=pc1, y=pc2)) + geom_point(size = 4, aes(color = cell_type )) + ggtitle("PCA") + xlab("PC1 69.25%") + ylab("PC2 26.17%") + theme_linedraw() + theme(plot.title = element_text(family = "Times", face = "bold", size = 20, hjust = 0.5), axis.title.x = element_text(family = "Times", face = "bold", size = 18), axis.title.y = element_text(family = "Times", face = "bold", size = 18), legend.text = element_text(family = "Times", face = "bold", size = 18), legend.title = element_text(family = "Times", face = "bold", size = 20)) + scale_color_manual(values = c("firebrick","darkcyan","darkolivegreen")) + labs(color = "Cell Type")
+plotpca
+ggsave("pca_10000.jpg", dpi = "retina", device = "jpeg")
+```
+
+
+```{r, echo = TRUE, tidy=TRUE}
+## T-SNE clustering of cell types usign top 10000 genes
+library(Rtsne)
+set.seed(18)
+tsne <- Rtsne(top10000.tran, perplexity = 2, pca = FALSE, normalize = FALSE, theta = 0.0, dims = 2) 
+summary(tsne)
+top10000.tran_tsne <- top10000.tran ### creating a new dataframe to add T-SNE elements for plotting
+top10000.tran_tsne$x_tsne <- tsne$Y[,1]
+top10000.tran_tsne$y_tsne <- tsne$Y[,2]
+plot.tsne <- ggplot(top10000.tran_tsne, aes(x=x_tsne, y=y_tsne)) + geom_point(size = 2, aes(color = cell_type )) + ggtitle("T-SNE") + xlab("Dim 1") + ylab("Dim 2") + theme(plot.title = element_text(family = "Times", face = "bold", size = 16, hjust = 0.5), axis.title.x = element_text(family = "Times", face = "bold", size = 14), axis.title.y = element_text(family = "Times", face = "bold", size = 14), legend.text = element_text(family = "Times", face = "bold", size = 12), legend.title = element_text(family = "Times", face = "bold", size = 14)) + scale_color_manual(values = c("firebrick","darkcyan","darkolivegreen")) + labs(color = "Cell Type")
+plot.tsne
+ggsave("tsne_10000.jpg", dpi = "retina", device = "jpeg")
+```
+
+
+
+
+
+
+
+
