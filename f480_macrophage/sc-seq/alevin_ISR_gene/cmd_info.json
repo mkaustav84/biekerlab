@@ -1,0 +1,22 @@
+{
+    "salmon_version": "1.1.0",
+    "libType": "ISR",
+    "mates1": [
+        "1088_GEX_F480Pos_S6_L001_R1_001.fastq.gz",
+        "1088_GEX_F480Pos_S6_L002_R1_001.fastq.gz",
+        "1088_GEX_F480Pos_S6_L003_R1_001.fastq.gz",
+        "1088_GEX_F480Pos_S6_L004_R1_001.fastq.gz"
+    ],
+    "mates2": [
+        "1088_GEX_F480Pos_S6_L001_R2_001.fastq.gz",
+        "1088_GEX_F480Pos_S6_L002_R2_001.fastq.gz",
+        "1088_GEX_F480Pos_S6_L003_R2_001.fastq.gz",
+        "1088_GEX_F480Pos_S6_L004_R2_001.fastq.gz"
+    ],
+    "chromiumV3": [],
+    "index": "/sc/hydra/work/mukhek03/mouse_salmon_gencode_vM24",
+    "threads": "12",
+    "output": "../alevin_ISR_gene",
+    "tgMap": "/sc/hydra/work/mukhek03/txp2genename.tsv",
+    "auxDir": "aux_info"
+}

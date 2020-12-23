@@ -1,0 +1,195 @@
+---
+title: "f480 sc-seq"
+author: "Kaustav Mukherjee"
+date: "4/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=False}
+library(Seurat)
+library(tximport)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(fishpond)
+```
+
+```{r, echo=False, tidy=TRUE}
+########### Defining file path and checking files ######################
+sc_seq_files <- file.path("alevin_ISR_gene/alevin/quants_mat.gz")
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+########### Importing data from Alevin output using tximport ###########
+txi <- tximport(sc_seq_files, type="alevin")
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+########### Creating Seurat Object #####################################
+f480 <- CreateSeuratObject(counts = txi$counts , min.cells = 3, min.features = 200, project = "FL_F480")
+f480
+```
+
+```{r}
+########### QC Metrics #################################################
+head(f480@meta.data, 5)
+VlnPlot(f480, features = c("nFeature_RNA", "nCount_RNA"), ncol = 3)
+FeatureScatter(f480, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+f480 <- subset(f480, subset = nFeature_RNA > 200 & nFeature_RNA < 7500)
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+######### Normalization and Scaling ####################################
+f480 <- NormalizeData(f480, normalization.method = "LogNormalize", scale.factor = 10000) #### using the Seurat defaults
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+######### Variable Feature Selection ###################################
+f480 <- FindVariableFeatures(f480, selection.method = "vst", nfeatures = 4000)
+top100 <- head(VariableFeatures(f480), 100)
+top100
+```
+
+
+```{r, echo=FALSE, tidy=TRUE}
+########## Scaling the data ###########################################
+all.genes <- rownames(f480)
+f480 <- ScaleData(f480, features = all.genes)
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+#################### PCA ##############################################
+set.seed(18)
+f480 <- RunPCA(f480, features = VariableFeatures(object = f480))
+print(pbmc[["pca"]], dims = 1:5, nfeatures = 5)
+dim_loads_1_2 <- VizDimLoadings(f480, dims = 1:2, reduction = "pca")
+dim_loads_1_2
+dim_loads_3_4 <- VizDimLoadings(f480, dims = 3:4, reduction = "pca")
+dim_loads_3_4
+dim_loads_5 <- VizDimLoadings(f480, dims = 5, reduction = "pca")
+dim_loads_5
+DimPlot(f480, reduction = "pca") + scale_color_manual(values="darkcyan") + theme(text = element_text(family="Arial", size=18), legend.position = "None")
+DimHeatmap(f480, dims = 1:2, cells = 500)
+DimHeatmap(f480, dims = 3:5, cells = 500)
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+######### Determining optimum number of clusters ######################
+f480 <- JackStraw(f480, num.replicate = 100)
+f480 <- ScoreJackStraw(f480, dims = 1:20)
+JackStrawPlot(f480, dims = 1:20)
+ElbowPlot(f480)
+#### 20 PCs, 18 are significant
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+################# Clustering ##########################################
+set.seed(18)
+f480 <- FindNeighbors(f480, dims = 1:18)
+f480 <- FindClusters(f480, resolution = 0.5)
+head(Idents(f480), 5)
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+################# U-MAP and PCA Plot #################################
+set.seed(18)
+f480 <- RunUMAP(f480, dims = 1:18)
+getPalette = colorRampPalette(brewer.pal(12, "Paired"))
+umap_plot <- DimPlot(f480, reduction = "umap") + theme(text = element_text(family = "Arial", face = "bold", size = 18)) + labs(col="clusters") + scale_color_manual(values = getPalette(13))
+LabelClusters(plot = umap_plot, id = "ident", repel=TRUE, size=5)
+pca_plot <- DimPlot(f480, reduction = "pca") + theme(text = element_text(family = "Arial", face = "bold", size = 18)) + labs(col="clusters") + scale_color_manual(values = getPalette(13))
+saveRDS(f480, file = "f480_seurat_object.rds")
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+############## Clusters and Biomarkers ################################
+f480.markers <- FindAllMarkers(f480, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+top10_markers <- f480.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
+cluster4 <- f480.markers[f480.markers$cluster == 4,]
+cluster4_genes <- cluster4$gene
+#### genes from all clusters saved using above code
+######## Top 100 genes from clusters ##################################
+t = sapply(0:12, function(x){
+  f480.markers[f480.markers$cluster == x,][,7] %>% head(100)
+}, USE.NAMES = TRUE
+)   
+lapply(1:13, function(y){
+  write.csv(t[,y], file = paste0("cluster_markers/genes/top100_",y-1,".csv"), row.names = FALSE, quote = FALSE)
+})
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+############# Enrichment of markers in clusters #########################
+##### Heatmap ##########
+DoHeatmap(subset(f480, downsample=200), features = top10_markers$Gene, size = 3) + NoLegend() + theme(text = element_text(family="Arial", size=5))
+cluster_markers <- c("Hmox1","Vcam1","Fcrls","Ccr2","Hemgn","Hmgb3","Lcn2","Snca","Ypel4","Mest","Sox4","Serpina6","Cd200r3")
+####### Violin Plots #######
+lapply(cluster_markers, function(z) {
+  VlnPlot(f480, features = z) + theme_linedraw() + theme(text=element_text(family="Arial", size=18)) + scale_fill_manual(values = getPalette(13)) + labs(fill="Clusters")
+  ggsave(filename=paste0("cluster",(which(cluster_markers == z)-1),z,"_violin.png"), device = "png", dpi=300, height = 7, width = 8, units = "in")
+  }
+)
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+############# Feature Plots for markers #######################
+lapply(cluster_markers, function(y){
+  FeaturePlot(f480, features = y) + labs(col="Expression\nLevel") + theme(text = element_text(family = "Arial", face = "bold", size = 18))
+  ggsave(filename = paste0((which(cluster_markers == y)-1),y,".png"), device = "png", dpi=300, height = 7, width = 8, units = "in")
+  }
+)
+```
+
+```{r, echo=FALSE, tidy=TRUE}
+##### Enrichment of other RNAs - Klf1, Adra2b, Epor etc. #######
+##### Heatmap ###########
+known_genes <- c("Adra2b","Epor","Tfrc","Vcam1","Bcl11a", "Gata2","Runx1","Gata1","Klf1","Klf3","Klf9","Klf11","Klf16","E2f1","E2f2","E2f4","E2f8","Sp4")
+
+##### Violin ############
+lapply(known_genes, function(x) {
+  VlnPlot(f480, features = x) + theme_linedraw() + theme(text=element_text(family="Arial", size=18)) + scale_fill_manual(values = getPalette(13)) + labs(fill="Clusters")
+  ggsave(file=paste0(x,"_violin.png"), device = "png", dpi=300, height = 7, width = 8, units = "in")
+  }
+)
+lapply(globin, function(x) {
+  VlnPlot(f480, features = x) + theme_linedraw() + theme(text=element_text(family="Arial", size=18)) + scale_fill_manual(values = getPalette(13)) + labs(fill="Clusters")
+  ggsave(file=paste0(x,"_violin.png"), device = "png", dpi=300, height = 7, width = 8, units = "in")
+  }
+)
+
+####### Featuremaps - cluster superimposed #####################
+lapply(known_genes, function(a){
+  FeaturePlot(f480, features = a) + labs(col="Expression\nLevel") + theme(text = element_text(family = "Arial", face = "bold", size = 18))
+  ggsave(filename = paste0(a,".png"), device = "png", dpi=300, height = 7, width = 8, units = "in")
+  }
+)
+lapply(globin, function(b){
+  FeaturePlot(f480, features = b) + labs(col="Expression\nLevel") + theme(text = element_text(family = "Arial", face = "bold", size = 18))
+  ggsave(filename = paste0(b,".png"), device = "png", dpi=300, height = 7, width = 8, units = "in")
+  }
+)
+```
+
+
+```{r, echo=FALSE, tidy=TRUE}
+###### Klf1 clusters ###########################################
+klf1_cluster_markers <- FindMarkers(f480, ident.1 = c(4,5,7), min.pct = 0.25, only.pos = TRUE)
+lapply(klf1_markers, function(k){
+  FeaturePlot(f480, features = k) + labs(col="Expression\nLevel") + theme(text = element_text(family = "Arial", face = "bold", size = 18))
+  ggsave(filename = paste0(k,".png"), device = "png", dpi=300, height = 7, width = 8, units = "in")
+  }
+)
+lapply(klf1_markers, function(k){
+  VlnPlot(f480, features = k) + labs(col="Expression\nLevel") + theme(text = element_text(family = "Arial", face = "bold", size = 18))
+  ggsave(filename = paste0(k,"_violin.png"), device = "png", dpi=300, height = 7, width = 8, units = "in")
+  }
+)
+```
+
+                                               
+                                                

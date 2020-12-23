@@ -1,0 +1,23 @@
+---
+title: "ESRE and mac boxplots"
+author: "Kaustav Mukherjee"
+---
+```{r}
+library(c("ggplot2","plyr","reshape2"))
+ery_markers <- read.csv("~/Documents/Postdoc/macrophage_project/erythroid_macrophage_comparisons/erythroid_markers.txt", header = T, sep = "\t", check.names = F)
+colnames(ery_markers) <- c("Gene","ESRE","FL F480+","Spleen F480+")
+mac_markers <- read.csv("~/Documents/Postdoc/macrophage_project/erythroid_macrophage_comparisons/mac_markers.txt", header = T, sep = "\t", check.names = F)
+colnames(mac_markers) <- c("Gene","ESRE","FL F480+","Spleen F480+")
+ery_melt <- melt(ery_markers)
+mac_melt <- melt(mac_markers)
+boxplot_ery_melt <- ggplot(ery_melt, aes(x = variable, y = value, fill = variable)) + stat_boxplot(geom = "errorbar", width = 0.5) + geom_boxplot() + geom_dotplot(binwidth = 0.15, binaxis = "y", stackdir = "center", fill = "black") + theme_linedraw() + xlab("") + ylab("log2 FPKM") +  scale_x_discrete(labels = c("ESRE","FL F480+","Spleen F480+")) + scale_fill_manual(values = c("firebrick","darkcyan","darkolivegreen"), name = "Cell Type", labels = c("ESRE","FL F480+","Spleen F480+")) + theme(axis.title.y = element_text(family = "Times",face = "bold", size = 20), axis.text.y = element_text(family = "Times", size = 14), axis.text.x = element_text(family = "Times",size = 18),legend.title = element_text(family = "Times",size = "18",face = "bold"),legend.text = element_text(family = "Times", size = 14), legend.key.size = unit(1,"cm"))
+boxplot_ery_melt
+ggsave("ery_markers_boxplot.jpg", device = "jpeg", dpi = 300, path = "~/Documents/Postdoc/macrophage_project/erythroid_macrophage_comparisons/")
+boxplot_mac_melt <- ggplot(mac_melt, aes(x = variable, y = value, fill = variable)) + stat_boxplot(geom = "errorbar", width = 0.5) + geom_boxplot() + geom_dotplot(binwidth = 0.15, binaxis = "y", stackdir = "center", fill = "black") + theme_linedraw() + xlab("") + ylab("log2 FPKM") +  scale_x_discrete(labels = c("ESRE","FL F480+","Spleen F480+")) + scale_fill_manual(values = c("firebrick","darkcyan","darkolivegreen"), name = "Cell Type", labels = c("ESRE","FL F480+","Spleen F480+")) + theme(axis.title.y = element_text(family = "Times",face = "bold", size = 20), axis.text.y = element_text(family = "Times", size = 14), axis.text.x = element_text(family = "Times",size = 18),legend.title = element_text(family = "Times",size = "18",face = "bold"),legend.text = element_text(family = "Times", size = 14), legend.key.size = unit(1,"cm"))
+boxplot_mac_melt
+ggsave("mac_markers_boxplot.jpg", device = "jpeg", dpi = 300, path = "~/Documents/Postdoc/macrophage_project/erythroid_macrophage_comparisons/")
+
+
+
+```
+

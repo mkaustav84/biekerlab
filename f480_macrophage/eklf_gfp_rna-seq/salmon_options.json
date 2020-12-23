@@ -1,0 +1,8 @@
+{    
+    "salmon_version": "0.13.1",
+    "libType": "SR",
+    "validateMappings": [],
+    "threads": "8",
+    "fldMean": "250",
+    "fldSD": "50",
+}

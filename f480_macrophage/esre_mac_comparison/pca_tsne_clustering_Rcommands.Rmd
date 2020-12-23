@@ -1,0 +1,75 @@
+---
+title: "Erythoid macrophage comparison"
+author: "Kaustav Mukherjee"
+output: html_document
+---
+
+```{r}
+library("knitr")
+opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
+```
+
+```{r}
+## Loading Required Packages
+library("dplyr")
+library("cluster")
+library("ggplot2")
+library("magrittr")
+library("RColorBrewer")
+library("reshape2")
+library("tidyr")
+library("ggfortify")
+library("ggdendro")
+```
+
+```{r, echo=TRUE, tidy=TRUE}
+###### Reading in count files ############
+counts <- read.csv("counts_normalized.csv", header = T, sep = ",", row.names = 1)
+counts <- counts[-(23338:23342),] 
+counts <- counts[complete.cases(counts),]## removing empty rows
+ggplot(counts, aes(x = counts$ery1)) + geom_histogram(binwidth = 100) + ylim(0,50) + xlim(0,25000)
+counts <- counts + 1 ## adding a pseudocount of 1
+counts_log <- log2(counts)
+colnames(counts_log) <- c("ESRE1","ESRE2","ESRE3","FL F480-1","FL F480-2","FL F480-3","Spl F480-1","Spl F480-2")
+cell_type <- c("ESRE","ESRE","ESRE","FL mac","FL mac","FL mac","Spl mac","Spl mac")
+```
+
+
+```{r, echo = TRUE, tidy=TRUE}
+###### Hierarchical clustering of cell types using top 10000 genes #####
+set.seed(18)
+top10000 <- head(counts_log[order(counts_log$`FL F480-1`, decreasing= T),], n = 10000)
+ggplot(top10000, aes(x = top10000$`FL F480-1`)) + geom_histogram(binwidth = 0.1)
+clus10000 <- hclust(as.dist(1-cor(top10000)))
+plotclus <- ggdendrogram(clus10000, rotate = TRUE, size = 2) + xlab("") + ylab("") + theme_minimal() + theme(text = element_text(family = "Arial", face = "bold", size = 20))
+plotclus
+```
+
+
+```{r, echo = TRUE, tidy=TRUE}
+###### Preparing the dataframe for PCA and T-SNE #############
+top10000.tran <- data.frame(t(as.matrix(top10000)))
+```
+
+
+```{r, echo = TRUE, tidy=TRUE}
+###### Principal component analysis of cell types using top 10000 genes ######
+set.seed(18)
+pca <- prcomp(top10000.tran)
+summary(pca)
+top10000.tran_pca <- top10000.tran
+top10000.tran_pca$pc1 <- pca$x[,1]
+top10000.tran_pca$pc2 <- pca$x[,2]
+plotpca <- ggplot(top10000.tran_pca, aes(x=pc1, y=pc2)) + geom_point(size = 4, aes(color = cell_type )) + ggtitle("PCA") + xlab("PC1 69.25%") + ylab("PC2 26.17%") + theme_linedraw() + theme(plot.title = element_text(family = "Arial", face = "bold", size = 20, hjust = 0.5), axis.title.x = element_text(family = "Arial", face = "bold", size = 18), axis.title.y = element_text(family = "Arial", face = "bold", size = 18), legend.text = element_text(family = "Arial", face = "bold", size = 18), legend.title = element_text(family = "Arial", face = "bold", size = 20)) + scale_color_manual(values = c("firebrick","darkcyan","darkolivegreen")) + labs(color = "Cell Type")
+plotpca
+```
+
+
+
+
+
+
+
+
+
+
