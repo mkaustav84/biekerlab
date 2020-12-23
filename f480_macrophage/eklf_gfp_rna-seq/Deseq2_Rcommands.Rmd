@@ -1,0 +1,110 @@
+---
+title: "macrophage gfp rna-seq"
+author: "Kaustav"
+date: "September 4, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("tximport")
+library("BiocManager")
+library("cluster")
+library("corrplot")
+library("DESeq2")
+library("dplyr")
+library("edgeR")
+library("ensembldb")
+library("ggplot2")
+library("ggfortify")
+library("magrittr")
+library("RColorBrewer")
+library("reshape2")
+library("EnsDb.Mmusculus.v79")
+```
+
+```{r}
+###### Creating tx2gene from mouse Ensembl Grcm38 build ##########
+edb <- EnsDb.Mmusculus.v79
+tx2gene <- transcripts(edb, return.type = "DataFrame")
+tx2gene <- tx2gene[,c(7,8)]
+tx2gene <- tx2gene[,c(2,1)]
+```
+
+```{r}
+######### Reading in files with tximport ########################
+dir <- ("salmon_quant/")
+list.files(dir)
+samples <- read.table(file.path(dir, "samples.txt"), header = TRUE)
+samples
+files <- file.path(dir, samples$Samples, "quant.sf")
+files
+names(files) <- c("1_EKLF_GFP","2_EKLF_GFP","9_EKLF_GFP","3_minus","4_minus","10_minus")
+all(file.exists(files))
+txi <- tximport(files, type = "salmon", tx2gene = tx2gene, ignoreTxVersion = TRUE)
+names(txi)
+head(txi$counts)
+```
+
+```{r}
+######### Creating the DESeq2 DF #########################
+samples$condition <- factor(rep(c("EKLF_GFP","EKLF_minus"),each=3))
+samples
+ddsTxi <- DESeqDataSetFromTximport(txi,colData = samples,design = ~ condition)
+```
+
+```{r}
+########## pre-filtering ###############
+keep <- rowSums(counts(ddsTxi)) >= 10
+dds <- ddsTxi[keep,]
+```
+
+```{r}
+######## Differential expression #########
+dds <- DESeq(dds)
+res <- results(dds, contrast=c("condition","EKLF_GFP","EKLF_minus"))
+head(res)
+```
+
+```{r}
+##### Ordering and exporting results #########
+resOrdered <- res[order(res$pvalue),]
+summary(res)
+resOrdered$Gene_id <- rownames(resOrdered)
+resOrdered <- resOrdered[,c(7,1,2,3,4,5,6)]
+write.csv(resOrdered, "deseq_results.csv")
+```
+
+
+```{r}
+######## Get names ##########################
+res_genes <- select(edb, keys = resOrdered$Gene_id, keytype = "GENEID", columns = c("GENEID", "GENENAME"))
+res_final <- cbind(res_genes,resOrdered[,c(2:7)])
+```
+
+```{r}
+######### Filtering #####################
+#### using dplyr::filter so need to detach ensembldb ##################
+up_sig_EKLF_GFP <- dplyr::filter(as.data.frame(res_final), padj < 0.05 & log2FoldChange > 0)
+write.csv(up_sig_EKLF_GFP, "up_sig_EKLF_GFP.csv")
+down_sig_EKLF_GFP <- dplyr::filter(as.data.frame(res_final), padj < 0.05 & log2FoldChange < 0)
+```
+
+```{r}
+########## Variance stabilized Normalization ##################
+vsd <- vst(dds, blind = FALSE)
+var_stab_data <- assay(vsd)
+var_stab_data <- as.data.frame(var_stab_data)
+var_stab_data$Gene_id <- rownames(var_stab_data)
+var_stab_data <- var_stab_data[,c(7,1,2,3,4,5,6)]
+vsgenes <- select(edb, keys = var_stab_data$Gene_id, keytype = "GENEID", columns = c("GENEID", "GENENAME"))
+var_stab_data <- cbind(vsgenes,var_stab_data[,c(2:7)])
+```
+
+```{r}
+######### Generating normalized counts #######################
+norm_count_salmon <- counts(dds, normalized = TRUE)
+norm_count_salmon <- cbind(vsgenes,norm_count_salmon[,c(1:6)])
+write.csv(as.data.frame(norm_count_salmon), file = "deseq_norm_counts.csv")
+```
+
